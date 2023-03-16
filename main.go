@@ -69,7 +69,8 @@ Reconnect:
 
 	// ExchangeDeclare?
 
-	q, err := ch.QueueDeclare(
+	// https://pkg.go.dev/github.com/rabbitmq/amqp091-go#Channel.QueueDeclarePassive
+	q, err := ch.QueueDeclarePassive(
 		queue, // name
 		true,  // durable
 		false, // delete when unused
