@@ -20,9 +20,6 @@ const (
 	maxBytes  = 30 * 1024 * 1024 // 30MB
 )
 
-// http://www.rabbitmq.com/tutorials/tutorial-two-go.html
-// http://godoc.org/github.com/streadway/amqp#example-Channel-Consume
-
 var (
 	rabbitmqAddress string
 )
@@ -46,14 +43,14 @@ func main() {
 	}
 
 Reconnect:
-	// connect to rabbitmq, wait if rabbitmq is not running yet
+	// Connect to RabbitMQ, wait and retry in case RabbitMQ is not running yet.
 	var conn *amqp.Connection
 	for {
 		var err error
 		if conn, err = amqp.Dial(rabbitmqAddress); err == nil {
 			break
 		}
-		log.Printf("%v", err) // => "dial tcp 127.0.0.1:5672: getsockopt: connection refused"
+		log.Printf("%v", err)
 		time.Sleep(interval)
 	}
 	defer conn.Close()
@@ -66,8 +63,6 @@ Reconnect:
 	if err != nil {
 		log.Fatal(err)
 	}
-
-	// ExchangeDeclare?
 
 	// https://pkg.go.dev/github.com/rabbitmq/amqp091-go#Channel.QueueDeclarePassive
 	q, err := ch.QueueDeclarePassive(
@@ -82,8 +77,7 @@ Reconnect:
 		log.Fatal(err)
 	}
 
-	// QueueBind? (to routing key)
-
+	// https://pkg.go.dev/github.com/rabbitmq/amqp091-go#Channel.Consume
 	msgs, err := ch.Consume(
 		q.Name, // queue
 		"",     // consumer
@@ -104,31 +98,20 @@ Reconnect:
 	closed := conn.NotifyClose(make(chan *amqp.Error))
 
 	// Set up channel on which to send signal notifications.
-	// We must use a buffered channel or risk missing the signal
-	// if we're not ready to receive when the signal is sent.
 	sigint := make(chan os.Signal, 1)
 	signal.Notify(sigint, os.Interrupt, syscall.SIGTERM)
 
 	log.Printf("Listening on %s for queue %q", rabbitmqAddress, queue)
 
-	// Read batch of messages, post them, and ack when done
+	// Read batch of messages, post them, and ack when done.
 ForLoop:
 	for {
 		select {
 		case msg := <-msgs:
-			// if channel was closed
-			//if msg == nil {
-			//	log.Printf("Channel closed")
-			//	break ForLoop
-			//}
-
-			// content-type can be "application/json"
-			// content-encoding can be "identity" or "gzip"
-
-			// append record to buffer, grow if needed
+			// Append record to buffer, grow if needed.
 			batch.Add(msg)
 
-			// send if 500 records in buffer (limit for bigquery streaming inserts)
+			// Send if 500 records in buffer.
 			if batch.count == 500 || batch.Len() >= maxBytes {
 				send(f, batch, ch)
 				timer.Reset(interval) // reset timer to zero
@@ -152,7 +135,7 @@ ForLoop:
 			}
 			goto Reconnect
 
-		// Interrupt/kill signal received
+		// Interrupt/kill signal received.
 		case <-sigint:
 			log.Printf("Signal received")
 			break ForLoop
@@ -177,5 +160,4 @@ func send(f *forwarder, batch *batch, acknowledger amqp.Acknowledger) {
 		acknowledger.Nack(batch.tag, true, true)
 	}
 	batch.Reset()
-	batch.count = 0
 }

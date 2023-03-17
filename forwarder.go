@@ -15,10 +15,7 @@ type forwarder struct {
 }
 
 var httpClient = &http.Client{
-	//Transport: &http.Transport{
-	//    DisableCompression:    true, // accept/ignore Accept-Encoding: gzip
-	//}
-	Timeout: time.Second * 20,
+	Timeout: time.Second * 50,
 }
 
 func (f *forwarder) post(body io.Reader) (err error) {
